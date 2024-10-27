@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Interactive List with Tags</title>
+	<link rel="stylesheet" href="css/styles.css"></link>
+</head>
+<body>
+
+	<div id="search-container">
+		<input type="text" id="search-input" placeholder="Search by tags (space-separated)">
+		<div class="autocomplete-suggestions" id="autocomplete-suggestions"></div>
+		<div id="search-tags-container"></div>
+		<div id="filter-container">
+			<input type="checkbox" id="filter-untagged">
+			<label for="filter-untagged">Show only untagged items</label>
+		</div>
+	</div>
+
+	<div class="container">
+		<div class="left-window hidden" id="info-display">
+			<h2>Item Information</h2>
+			<p id="item-info">Select an item from the list to see its details here.</p>
+			<div class="tags" id="tags-container"></div>
+			<input type="text" id="tag-input" placeholder="Add tags (space-separated)">
+			<div id="tag-suggestions" class="popup-suggestions"></div>
+		</div>
+
+		<div class="right-window">
+			<ul id="item-list"></ul>
+		</div>
+
+		<div class="right-image-bar hidden" id="image-display">
+			<p>No image available</p>
+		</div>
+	</div>
+
+	<div class="overlay" id="overlay">
+		<div class="popup-content" id="popupContent">
+			<img id="popupImage">
+		</div>
+	</div>
+
+	<script src="js/main.js" type="module"></script>
+</body>
+</html>
