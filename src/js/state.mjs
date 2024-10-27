@@ -79,6 +79,8 @@ function addTags(newTags) {
 
 		backendUpdateTags(currentItems[selectedIndex].name, currentItems[selectedIndex].tags)
 		generateList()
+	} else {
+		console.log("current index is ", selectedIndex);
 	}
 }
 
@@ -113,9 +115,6 @@ function generateList(filterTags = [], filterUntagged = false) {
 
 		currentItems.push(item);
     });
-
-	selectedIndex = -1;
-	highlightedIndex = -1;
 }
 
 function updateHighlight() {
