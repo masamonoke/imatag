@@ -135,14 +135,17 @@ impl Directory {
 
     pub fn update_tags(&mut self, tags: Vec<String>, filename: String) {
         if let Some(arr) = self.config.as_array_mut() {
-            for img in arr {
+            for img in &mut *arr {
                 if img.get("name").and_then(|n| n.as_str()) == Some(filename.as_str()) {
                      if let Some(t) = img.get_mut("tags") {
                         let tags_json = json!(tags);
                         *t = tags_json;
+                        return;
                      }
                 }
             }
+
+            arr.push(serde_json::to_value(FileInfo { name: filename, is_image: false, tags }).unwrap());
         }
     }
 
