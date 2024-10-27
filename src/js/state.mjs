@@ -74,12 +74,12 @@ function addTags(newTags) {
 			}
 		});
 		updateTags(currentTags);
+
+		tagInput.value = '';
+
+		backendUpdateTags(currentItems[selectedIndex].name, currentItems[selectedIndex].tags)
+		generateList()
 	}
-	tagInput.value = '';
-
-	generateList()
-
-	backendUpdateTags(currentItems[selectedIndex].name, currentItems[selectedIndex].tags)
 }
 
 function generateList(filterTags = [], filterUntagged = false) {
@@ -291,7 +291,6 @@ document.addEventListener('keydown', (event) => {
 		event.preventDefault();
 		selectedIndex = (selectedIndex + 1) % currentItems.length;
 		updateSelection(selectedIndex);
-		console.log("current items", currentItems);
 	}
 
 	if (event.key === 'ArrowUp') {

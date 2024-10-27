@@ -26,7 +26,6 @@ export async function backendOpenFile(filename) {
 }
 
 export async function backendUpdateTags(filename, tags) {
-	console.log("called")
 	await invoke("update_tags", {filename: filename, tags: tags });
 }
 
