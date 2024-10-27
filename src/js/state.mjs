@@ -59,9 +59,9 @@ function removeTag(tagIndex) {
 	if (selectedIndex !== -1) {
 		currentItems[selectedIndex].tags.splice(tagIndex, 1);
 		updateTags(currentItems[selectedIndex].tags);
+		backendUpdateTags(currentItems[selectedIndex].name, currentItems[selectedIndex].tags);
+		generateList()
 	}
-
-	generateList()
 }
 
 function addTags(newTags) {
