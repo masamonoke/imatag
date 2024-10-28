@@ -1,4 +1,5 @@
-import { backendGetFiles, backendOpenFile, backendUpdateTags } from "./tauri.mjs";
+import { backendGetFiles, backendUpdateTags } from "./tauri.mjs";
+import { showPopup, hidePopup, isPopupVisible } from './popup.mjs'
 
 const items = [];
 let currentItems = []
@@ -367,32 +368,4 @@ searchInput.addEventListener('keydown', (e) => {
 		autocompleteSuggestions.style.display = 'none';
 	}
 });
-
-const overlay = document.getElementById("overlay");
-const popupContent = document.getElementById("popupContent");
-let isPopupVisible = false;
-const popupImage = document.getElementById("popupImage");
-
-function showPopup(filename) {
-	backendOpenFile(filename).then((base64_img) => {
-		popupImage.src = base64_img;
-		overlay.style.display = "flex";
-		overlay.classList.remove("fadeOut");
-		popupContent.classList.remove("scaleOut");
-		overlay.classList.add("fadeIn");
-		popupContent.classList.add("scaleIn");
-		isPopupVisible = true;
-
-	});
-}
-
-function hidePopup() {
-	overlay.classList.remove("fadeIn");
-	popupContent.classList.remove("scaleIn");
-	overlay.classList.add("fadeOut");
-	popupContent.classList.add("scaleOut");
-
-	overlay.style.display = "none";
-	isPopupVisible = false;
-}
 

@@ -13,20 +13,12 @@
 }
 
 .popup-content {
-	background-color: #333;
-	color: #fff;
-	padding: 20px;
-	border-radius: 8px;
 	text-align: center;
-	max-width: 90%;
-	max-height: 80%;
-	overflow: auto;
-	animation: scaleIn 0.5s ease forwards;
-}
-.popup-content img {
 	max-width: 100%;
-	border-radius: 8px;
-	margin-top: 10px;
+	max-height: 100%;
+	overflow: auto;
+	border-radius: 10px;
+	animation: scaleIn 0.5s ease forwards;
 }
 
 @keyframes fadeIn {
