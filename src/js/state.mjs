@@ -1,4 +1,5 @@
 import { backendGetFiles, backendUpdateTags } from "./tauri.mjs";
+import { shuffle } from "./shuffle.mjs";
 import { showPopup, hidePopup, isPopupVisible } from './popup.mjs'
 
 const items = [];
@@ -369,3 +370,7 @@ searchInput.addEventListener('keydown', (e) => {
 	}
 });
 
+document.getElementById("shuffle-button").addEventListener("click", () => {
+	shuffle(items);
+	generateList();
+});
