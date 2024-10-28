@@ -1,4 +1,5 @@
 import { backendGetFiles, backendOpenFile, backendUpdateTags } from "./tauri.mjs";
+import { shuffle } from "./shuffle.mjs";
 
 const items = [];
 let currentItems = []
@@ -393,3 +394,7 @@ function hidePopup() {
 	isPopupVisible = false;
 }
 
+document.getElementById("shuffle-button").addEventListener("click", () => {
+	shuffle(items);
+	generateList();
+});
