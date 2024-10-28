@@ -7,6 +7,7 @@ let currentItems = []
 let selectedIndex = -1;
 let searchTags = [];
 let highlightedIndex = -1;
+let filterUntagged = false;
 
 const globalTags = new Set();
 const itemList = document.getElementById('item-list');
@@ -86,7 +87,7 @@ function addTags(newTags) {
 	}
 }
 
-function generateList(filterTags = [], filterUntagged = false) {
+function generateList(filterTags = []) {
     itemList.innerHTML = '';
 
 	currentItems = []
@@ -200,8 +201,10 @@ export function main() {
 
 checkbox.addEventListener('change', () => {
     if (checkbox.checked) {
-        generateList(searchTags, true);
+		filterUntagged = true;
+        generateList(searchTags);
     } else {
+		filterUntagged = false;
         generateList(searchTags);
     }
 });
