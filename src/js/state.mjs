@@ -1,5 +1,6 @@
-import { backendGetFiles, backendOpenFile, backendUpdateTags } from "./tauri.mjs";
+import { backendGetFiles, backendUpdateTags } from "./tauri.mjs";
 import { shuffle } from "./shuffle.mjs";
+import { showPopup, hidePopup, isPopupVisible } from './popup.mjs'
 
 const items = [];
 let currentItems = []
@@ -89,6 +90,8 @@ function generateList(filterTags = [], filterUntagged = false) {
     itemList.innerHTML = '';
 
 	currentItems = []
+	selectedIndex = 0;
+	highlightedIndex = 0;
     items.forEach((item, index) => {
 		if (filterUntagged) {
 			if (item.tags.length != 0) {
@@ -112,9 +115,9 @@ function generateList(filterTags = [], filterUntagged = false) {
             });
 
             itemList.appendChild(listItem);
+			currentItems.push(item);
         }
 
-		currentItems.push(item);
     });
 }
 
@@ -289,6 +292,7 @@ document.addEventListener('keydown', (event) => {
 
 	if (event.key === 'ArrowDown') {
 		event.preventDefault();
+		console.log(currentItems);
 		selectedIndex = (selectedIndex + 1) % currentItems.length;
 		updateSelection(selectedIndex);
 	}
@@ -365,34 +369,6 @@ searchInput.addEventListener('keydown', (e) => {
 		autocompleteSuggestions.style.display = 'none';
 	}
 });
-
-const overlay = document.getElementById("overlay");
-const popupContent = document.getElementById("popupContent");
-let isPopupVisible = false;
-const popupImage = document.getElementById("popupImage");
-
-function showPopup(filename) {
-	backendOpenFile(filename).then((base64_img) => {
-		popupImage.src = base64_img;
-		overlay.style.display = "flex";
-		overlay.classList.remove("fadeOut");
-		popupContent.classList.remove("scaleOut");
-		overlay.classList.add("fadeIn");
-		popupContent.classList.add("scaleIn");
-		isPopupVisible = true;
-
-	});
-}
-
-function hidePopup() {
-	overlay.classList.remove("fadeIn");
-	popupContent.classList.remove("scaleIn");
-	overlay.classList.add("fadeOut");
-	popupContent.classList.add("scaleOut");
-
-	overlay.style.display = "none";
-	isPopupVisible = false;
-}
 
 document.getElementById("shuffle-button").addEventListener("click", () => {
 	shuffle(items);
