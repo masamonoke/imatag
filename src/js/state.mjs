@@ -81,18 +81,20 @@ function addTags(newTags) {
 		tagInput.value = '';
 
 		backendUpdateTags(currentItems[selectedIndex].name, currentItems[selectedIndex].tags)
-		generateList()
+		generateList(resetIndex = false);
 	} else {
 		console.log("current index is ", selectedIndex);
 	}
 }
 
-function generateList(filterTags = []) {
+function generateList(filterTags = [], resetIndex = true) {
     itemList.innerHTML = '';
 
 	currentItems = []
-	selectedIndex = 0;
-	highlightedIndex = 0;
+	if (resetIndex) {
+		selectedIndex = 0;
+		highlightedIndex = 0;
+	}
     items.forEach((item, index) => {
 		if (filterUntagged) {
 			if (item.tags.length != 0) {
