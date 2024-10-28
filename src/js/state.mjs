@@ -88,6 +88,8 @@ function generateList(filterTags = [], filterUntagged = false) {
     itemList.innerHTML = '';
 
 	currentItems = []
+	selectedIndex = 0;
+	highlightedIndex = 0;
     items.forEach((item, index) => {
 		if (filterUntagged) {
 			if (item.tags.length != 0) {
@@ -111,9 +113,9 @@ function generateList(filterTags = [], filterUntagged = false) {
             });
 
             itemList.appendChild(listItem);
+			currentItems.push(item);
         }
 
-		currentItems.push(item);
     });
 }
 
@@ -288,6 +290,7 @@ document.addEventListener('keydown', (event) => {
 
 	if (event.key === 'ArrowDown') {
 		event.preventDefault();
+		console.log(currentItems);
 		selectedIndex = (selectedIndex + 1) % currentItems.length;
 		updateSelection(selectedIndex);
 	}
