@@ -19,7 +19,8 @@ const searchInput = document.getElementById('search-input');
 const searchTagsContainer = document.getElementById('search-tags-container');
 const tagSuggestionsPopup = document.getElementById('tag-suggestions');
 const checkbox = document.getElementById('filter-untagged');
-
+let currentPage = 0;
+const perPageElements = 10;
 
 function updateSelection(index) {
 	const selectedItem = itemList.children[index];
@@ -81,9 +82,7 @@ function addTags(newTags) {
 		tagInput.value = '';
 
 		backendUpdateTags(currentItems[selectedIndex].name, currentItems[selectedIndex].tags)
-		generateList(resetIndex = false);
-	} else {
-		console.log("current index is ", selectedIndex);
+		generateList(undefined, false);
 	}
 }
 
@@ -95,7 +94,8 @@ function generateList(filterTags = [], resetIndex = true) {
 		selectedIndex = 0;
 		highlightedIndex = 0;
 	}
-    items.forEach((item, index) => {
+
+    items.forEach((item, _) => {
 		if (filterUntagged) {
 			if (item.tags.length != 0) {
 				return;
@@ -103,25 +103,32 @@ function generateList(filterTags = [], resetIndex = true) {
 		}
 
         if (filterTags.length === 0 || filterTags.every(tag => item.tags.includes(tag))) {
-            const listItem = document.createElement('li');
-            listItem.textContent = item.name;
-            listItem.setAttribute('data-info', item.info);
-            listItem.setAttribute('is-image', item.isImage);
-
-            if (item.tags && item.tags.length > 0) {
-                listItem.classList.add('item-with-tags');
-            }
-
-            listItem.addEventListener('click', () => {
-                selectedIndex = index;
-                updateSelection(selectedIndex);
-            });
-
-            itemList.appendChild(listItem);
 			currentItems.push(item);
         }
-
     });
+
+	const start = currentPage * perPageElements;
+	const end = start + perPageElements - 1;
+	currentItems = currentItems.slice(start, end);
+
+	currentItems.forEach((item, index) => {
+		const listItem = document.createElement('li');
+		listItem.textContent = item.name;
+		listItem.setAttribute('data-info', item.info);
+		listItem.setAttribute('is-image', item.isImage);
+
+		if (item.tags && item.tags.length > 0) {
+			listItem.classList.add('item-with-tags');
+		}
+
+		listItem.addEventListener('click', () => {
+			selectedIndex = index;
+			updateSelection(selectedIndex);
+		});
+
+		itemList.appendChild(listItem);
+	});
+
 }
 
 function updateHighlight() {
@@ -297,7 +304,6 @@ document.addEventListener('keydown', (event) => {
 
 	if (event.key === 'ArrowDown') {
 		event.preventDefault();
-		console.log(currentItems);
 		selectedIndex = (selectedIndex + 1) % currentItems.length;
 		updateSelection(selectedIndex);
 	}
@@ -306,6 +312,28 @@ document.addEventListener('keydown', (event) => {
 		event.preventDefault();
 		selectedIndex = (selectedIndex - 1 + currentItems.length) % currentItems.length;
 		updateSelection(selectedIndex);
+	}
+
+	if (event.key === 'ArrowLeft') {
+		event.preventDefault();
+		currentPage--;
+		if (currentPage < 0) {
+			currentPage = 0;
+		}
+		generateList(undefined, false);
+	}
+
+	if (event.key === 'ArrowRight') {
+		event.preventDefault();
+		currentPage++;
+		let maxPages = items.length / perPageElements;
+		if (items.length % perPageElements != 0) {
+			maxPages++;
+		}
+		if (currentPage > maxPages - 1) {
+			currentPage = maxPages - 1;
+		}
+		generateList(undefined, false);
 	}
 
 	if (event.code === 'Space') {
