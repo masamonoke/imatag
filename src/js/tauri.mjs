@@ -1,7 +1,6 @@
 const { invoke } = window.__TAURI__.core;
 
 export async function backendGetFiles(items, globalTags, generateList) {
-    console.log("Fetching files...");
     try {
         const files = await invoke('get_files');
 

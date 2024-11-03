@@ -22,10 +22,10 @@ const checkbox = document.getElementById('filter-untagged');
 let currentPage = 0;
 const perPageElements = 10;
 
-function updateSelection(index) {
-	const selectedItem = itemList.children[index];
+function updateSelection() {
+	const selectedItem = itemList.children[selectedIndex];
 	const itemInfo     = selectedItem.getAttribute('data-info');
-	const itemTags     = currentItems[index].tags;
+	const itemTags     = currentItems[selectedIndex].tags;
 
 	document.getElementById('item-info').textContent = itemInfo;
 	infoDisplay.classList.remove('hidden');
@@ -82,11 +82,11 @@ function addTags(newTags) {
 		tagInput.value = '';
 
 		backendUpdateTags(currentItems[selectedIndex].name, currentItems[selectedIndex].tags)
-		generateList(undefined, false);
+		generateList(false);
 	}
 }
 
-function generateList(filterTags = [], resetIndex = true) {
+function generateList(resetIndex = true) {
     itemList.innerHTML = '';
 
 	currentItems = []
@@ -102,7 +102,7 @@ function generateList(filterTags = [], resetIndex = true) {
 			}
 		}
 
-        if (filterTags.length === 0 || filterTags.every(tag => item.tags.includes(tag))) {
+        if (searchTags.length === 0 || searchTags.every(tag => item.tags.includes(tag))) {
 			currentItems.push(item);
         }
     });
@@ -123,7 +123,7 @@ function generateList(filterTags = [], resetIndex = true) {
 
 		listItem.addEventListener('click', () => {
 			selectedIndex = index;
-			updateSelection(selectedIndex);
+			updateSelection();
 		});
 
 		itemList.appendChild(listItem);
@@ -161,7 +161,7 @@ function addSearchTags(newTags) {
 		}
 	});
 	updateSearchTags();
-	generateList(searchTags);
+	generateList(true);
 	searchInput.value = '';
 }
 
@@ -189,7 +189,8 @@ function removeSearchTag(tagIndex) {
 }
 
 function updateTagHighlight() {
-    const suggestionElements = document.querySelectorAll('.popup-suggestions .suggestion-item');
+    const suggestionElements = document
+		.querySelectorAll('.popup-suggestions .suggestion-item');
     suggestionElements.forEach((element, index) => {
         element.classList.toggle('highlighted', index === highlightedTagIndex);
     });
@@ -211,11 +212,12 @@ export function main() {
 checkbox.addEventListener('change', () => {
     if (checkbox.checked) {
 		filterUntagged = true;
-        generateList(searchTags);
+        generateList(true);
     } else {
 		filterUntagged = false;
-        generateList(searchTags);
+        generateList(true);
     }
+	updateSelection();
 });
 
 tagInput.addEventListener('keydown', (e) => {
@@ -276,7 +278,8 @@ tagInput.addEventListener('keydown', (e) => {
         updateTagHighlight();
         e.preventDefault();
     } else if (e.key === 'ArrowUp') {
-        highlightedTagIndex = (highlightedTagIndex - 1 + suggestions.length) % suggestions.length;
+        highlightedTagIndex = (highlightedTagIndex - 1 + suggestions.length) %
+			suggestions.length;
         updateTagHighlight();
         e.preventDefault();
     }
@@ -295,23 +298,27 @@ document.addEventListener('click', (event) => {
     autocompleteSuggestions.style.display = 'none';
 });
 
+function hideLeftBar() {
+	toggleLeftBar(false);
+	Array.from(itemList.children).forEach(i => i.classList.remove('selected'));
+	selectedIndex = -1;
+}
+
 document.addEventListener('keydown', (event) => {
 	if (event.key === 'Escape') {
-		toggleLeftBar(false);
-		Array.from(itemList.children).forEach(i => i.classList.remove('selected'));
-		selectedIndex = -1;
+		hideLeftBar()
 	}
 
 	if (event.key === 'ArrowDown') {
 		event.preventDefault();
 		selectedIndex = (selectedIndex + 1) % currentItems.length;
-		updateSelection(selectedIndex);
+		updateSelection();
 	}
 
 	if (event.key === 'ArrowUp') {
 		event.preventDefault();
 		selectedIndex = (selectedIndex - 1 + currentItems.length) % currentItems.length;
-		updateSelection(selectedIndex);
+		updateSelection();
 	}
 
 	if (event.key === 'ArrowLeft') {
@@ -320,20 +327,38 @@ document.addEventListener('keydown', (event) => {
 		if (currentPage < 0) {
 			currentPage = 0;
 		}
-		generateList(undefined, false);
+		hideLeftBar()
+		generateList(true);
+		updateSelection();
 	}
 
 	if (event.key === 'ArrowRight') {
 		event.preventDefault();
 		currentPage++;
-		let maxPages = items.length / perPageElements;
-		if (items.length % perPageElements != 0) {
-			maxPages++;
+		let maxPages;
+		if (searchTags.length > 0) {
+			maxPages = Math.round(currentItems.length / perPageElements);
+			if (maxPages != 0 && currentItems.length % perPageElements != 0) {
+				maxPages++;
+			}
+		} else
+		{
+			maxPages = items.length / perPageElements;
+			if (items.length % perPageElements != 0) {
+				maxPages++;
+			}
 		}
+
 		if (currentPage > maxPages - 1) {
-			currentPage = maxPages - 1;
+			if (maxPages == 0) {
+				currentPage = maxPages;
+			} else {
+				currentPage = maxPages - 1;
+			}
 		}
-		generateList(undefined, false);
+		hideLeftBar();
+		generateList(true);
+		updateSelection();
 	}
 
 	if (event.code === 'Space') {
@@ -353,12 +378,16 @@ searchInput.addEventListener('keydown', (e) => {
 		e.preventDefault();
 		const tagsToAdd = searchInput.value.split(' ').filter(tag => tag.trim() !== '');
 		addSearchTags(tagsToAdd);
+		currentPage = 0;
+		generateList(true);
+		updateSelection();
 	}
 });
 
 searchInput.addEventListener('input', (e) => {
 	const inputText = e.target.value;
-	const suggestions = Array.from(globalTags).filter(tag => tag.startsWith(inputText) && tag !== inputText);
+	const suggestions = Array.from(globalTags).filter(tag => tag.startsWith(inputText)
+		&& tag !== inputText);
 
 	autocompleteSuggestions.innerHTML = '';
 	autocompleteSuggestions.style.display = suggestions.length > 0 ? 'block' : 'none';
@@ -396,8 +425,6 @@ searchInput.addEventListener('keydown', (e) => {
 		updateHighlight();
 		e.preventDefault();
 	} else if (e.key === 'Enter' && highlightedIndex > -1) {
-		const selectedSuggestion = suggestions[highlightedIndex].textContent;
-		tagInput.value += (tagInput.value ? ' ' : '') + selectedSuggestion;
 		autocompleteSuggestions.innerHTML = '';
 		autocompleteSuggestions.style.display = 'none';
 	}
@@ -405,5 +432,7 @@ searchInput.addEventListener('keydown', (e) => {
 
 document.getElementById("shuffle-button").addEventListener("click", () => {
 	shuffle(items);
-	generateList();
+	currentPage = 0;
+	generateList(true);
+	updateSelection();
 });

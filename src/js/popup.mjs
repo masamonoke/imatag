@@ -15,7 +15,6 @@ export function showPopup(filename) {
 		overlay.classList.add("fadeIn");
 		popupContent.classList.add("scaleIn");
 		isPopupVisible = true;
-
 	});
 }
 
