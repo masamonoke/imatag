@@ -25,6 +25,200 @@ class Directory {
 		this.highlightedTagIndex = -1;
 		this.currentPage = 0;
 
+		this.setDOM();
+	}
+
+	toggleLeftBar(show) {
+		this.infoDisplay.classList.toggle('hidden', !show);
+		if (!show) {
+			this.tagSuggestionsPopup.style.display = 'none';
+			this.autocompleteSuggestions.innerHTML = '';
+			this.autocompleteSuggestions.style.display = 'none';
+		}
+	}
+
+	hideLeftBar() {
+		this.toggleLeftBar(false);
+	}
+
+	updateSelection() {
+		const selectedItem = this.itemList.children[this.selectedIndex];
+		const itemInfo     = selectedItem.getAttribute('data-info');
+		const itemTags     = this.currentItems[this.selectedIndex].tags;
+
+		document.getElementById('item-info').textContent = itemInfo;
+		this.infoDisplay.classList.remove('hidden');
+
+		this.updateTags(itemTags);
+
+		Array.from(this.itemList.children).forEach(i => i.classList.remove('selected'));
+		selectedItem.classList.add('selected');
+
+		selectedItem.scrollIntoView({
+			behavior: 'smooth',
+			block:    'nearest',
+			inline:   'nearest'
+		});
+	}
+
+	updateTags(tags) {
+		this.tagsContainer.innerHTML = '';
+
+		tags.forEach((tag, tagIndex) => {
+			const tagElement = document.createElement('div');
+			tagElement.classList.add('tag');
+			tagElement.innerHTML = `<span>${tag}</span> <button>&times;</button>`;
+
+			tagElement.querySelector('button').addEventListener('click', (e) => {
+				e.stopPropagation();
+				this.removeTag(tagIndex);
+			});
+
+			this.tagsContainer.appendChild(tagElement);
+		});
+	}
+
+	removeTag(tagIndex) {
+		if (this.selectedIndex !== -1) {
+			this.currentItems[this.selectedIndex].tags.splice(tagIndex, 1);
+			this.updateTags(this.currentItems[this.selectedIndex].tags);
+			backendUpdateTags(this.currentItems[this.selectedIndex].name, this.currentItems[this.selectedIndex].tags);
+			this.generateList(false)
+			this.updateSelection();
+		}
+	}
+
+	addTags(newTags) {
+		if (this.selectedIndex !== -1) {
+			const currentTags = this.currentItems[this.selectedIndex].tags;
+			newTags.forEach(tag => {
+				if (tag && !currentTags.includes(tag.trim())) {
+					currentTags.push(tag.trim());
+					this.globalTags.add(tag.trim());
+				}
+			});
+			this.updateTags(currentTags);
+
+			this.tagInput.value = '';
+
+			backendUpdateTags(this.currentItems[this.selectedIndex].name, this.currentItems[this.selectedIndex].tags)
+			this.generateList(false);
+			this.updateSelection();
+		}
+	}
+
+	generateList(resetIndex = true) {
+		this.itemList.innerHTML = '';
+
+		this.currentItems = []
+		if (resetIndex) {
+			this.selectedIndex = 0;
+			this.highlightedIndex = 0;
+		}
+
+		this.items.forEach((item, _) => {
+			if (this.filterUntagged) {
+				if (item.tags.length != 0) {
+					return;
+				}
+			}
+
+			if (this.searchTags.length === 0 || this.searchTags.every(tag => item.tags.includes(tag))) {
+				this.currentItems.push(item);
+			}
+		});
+
+		const start = this.currentPage * this.perPageElements;
+		const end = start + this.perPageElements - 1;
+		this.currentItems = this.currentItems.slice(start, end);
+
+		this.currentItems.forEach((item, index) => {
+			const listItem = document.createElement('li');
+			listItem.textContent = item.name;
+			listItem.setAttribute('data-info', item.info);
+			listItem.setAttribute('is-image', item.isImage);
+
+			if (item.tags && item.tags.length > 0) {
+				listItem.classList.add('item-with-tags');
+			}
+
+			listItem.addEventListener('click', () => {
+				this.selectedIndex = index;
+				this.updateSelection();
+			});
+
+			this.itemList.appendChild(listItem);
+		});
+
+	}
+
+	updateHighlight() {
+		const suggestionElements = document.querySelectorAll('.autocomplete-suggestion');
+		suggestionElements.forEach((element, index) => {
+			element.classList.toggle('highlighted', index === this.highlightedIndex);
+		});
+
+		if (this.highlightedIndex >= 0) {
+			const highlightedElement = suggestionElements[this.highlightedIndex];
+			const container = this.autocompleteSuggestions;
+
+			const elementTop = highlightedElement.offsetTop;
+			const elementBottom = elementTop + highlightedElement.offsetHeight;
+			const containerTop = container.scrollTop;
+			const containerBottom = containerTop + container.clientHeight;
+
+			if (elementTop < containerTop) {
+				container.scrollTop = elementTop;
+			} else if (elementBottom > containerBottom) {
+				container.scrollTop = elementBottom - container.clientHeight;
+			}
+		}
+	}
+
+	addSearchTags(newTags) {
+		newTags.forEach(tag => {
+			if (!this.searchTags.includes(tag.trim())) {
+				this.searchTags.push(tag.trim());
+			}
+		});
+		this.updateSearchTags();
+		this.generateList(true);
+		this.searchInput.value = '';
+	}
+
+	updateSearchTags() {
+		this.searchTagsContainer.innerHTML = '';
+
+		this.searchTags.forEach((tag, tagIndex) => {
+			const tagElement = document.createElement('div');
+			tagElement.classList.add('tag');
+			tagElement.innerHTML = `<span>${tag}</span> <button>&times;</button>`;
+
+			tagElement.querySelector('button').addEventListener('click', (e) => {
+				e.stopPropagation();
+				this.removeSearchTag(tagIndex);
+			});
+
+			this.searchTagsContainer.appendChild(tagElement);
+		});
+	}
+
+	removeSearchTag(tagIndex) {
+		this.searchTags.splice(tagIndex, 1);
+		this.updateSearchTags();
+		this.generateList(this.searchTags);
+		this.updateSelection();
+	}
+
+	updateTagHighlight() {
+		const suggestionElements = document
+			.querySelectorAll('.popup-suggestions .suggestion-item');
+		suggestionElements.forEach((element, index) => {
+			element.classList.toggle('highlighted', index === this.highlightedTagIndex);
+		});
+	}
+
+	setDOM() {
 		this.checkbox.addEventListener('change', () => {
 			if (this.checkbox.checked) {
 				this.filterUntagged = true;
@@ -207,10 +401,8 @@ class Directory {
 				event.preventDefault();
 				if (isPopupVisible) {
 					hidePopup();
-				} else {
-					if (this.selectedIndex >= 0) {
-						showPopup(this.currentItems[this.selectedIndex].name);
-					}
+				} else if (this.selectedIndex >= 0) {
+					showPopup(this.currentItems[this.selectedIndex].name);
 				}
 			}
 		});
@@ -277,195 +469,6 @@ class Directory {
 			this.currentPage = 0;
 			this.generateList(true);
 			this.updateSelection();
-		});
-	}
-
-	toggleLeftBar(show) {
-		this.infoDisplay.classList.toggle('hidden', !show);
-		if (!show) {
-			this.tagSuggestionsPopup.style.display = 'none';
-			this.autocompleteSuggestions.innerHTML = '';
-			this.autocompleteSuggestions.style.display = 'none';
-		}
-	}
-
-	hideLeftBar() {
-		this.toggleLeftBar(false);
-		Array.from(this.itemList.children).forEach(i => i.classList.remove('selected'));
-		this.selectedIndex = -1;
-	}
-
-	updateSelection() {
-		const selectedItem = this.itemList.children[this.selectedIndex];
-		const itemInfo     = selectedItem.getAttribute('data-info');
-		const itemTags     = this.currentItems[this.selectedIndex].tags;
-
-		document.getElementById('item-info').textContent = itemInfo;
-		this.infoDisplay.classList.remove('hidden');
-
-		this.updateTags(itemTags);
-
-		Array.from(this.itemList.children).forEach(i => i.classList.remove('selected'));
-		selectedItem.classList.add('selected');
-
-		selectedItem.scrollIntoView({
-			behavior: 'smooth',
-			block:    'nearest',
-			inline:   'nearest'
-		});
-	}
-
-	updateTags(tags) {
-		this.tagsContainer.innerHTML = '';
-
-		tags.forEach((tag, tagIndex) => {
-			const tagElement = document.createElement('div');
-			tagElement.classList.add('tag');
-			tagElement.innerHTML = `<span>${tag}</span> <button>&times;</button>`;
-
-			tagElement.querySelector('button').addEventListener('click', (e) => {
-				e.stopPropagation();
-				removeTag(tagIndex);
-			});
-
-			this.tagsContainer.appendChild(tagElement);
-		});
-	}
-
-	removeTag(tagIndex) {
-		if (this.selectedIndex !== -1) {
-			this.currentItems[this.selectedIndex].tags.splice(tagIndex, 1);
-			this.updateTags(this.currentItems[this.selectedIndex].tags);
-			backendUpdateTags(this.currentItems[this.selectedIndex].name, this.currentItems[this.selectedIndex].tags);
-			this.generateList()
-		}
-	}
-
-	addTags(newTags) {
-		if (this.selectedIndex !== -1) {
-			const currentTags = this.currentItems[this.selectedIndex].tags;
-			newTags.forEach(tag => {
-				if (tag && !currentTags.includes(tag.trim())) {
-					currentTags.push(tag.trim());
-					this.globalTags.add(tag.trim());
-				}
-			});
-			this.updateTags(currentTags);
-
-			this.tagInput.value = '';
-
-			backendUpdateTags(this.currentItems[this.selectedIndex].name, this.currentItems[this.selectedIndex].tags)
-			this.generateList(false);
-		}
-	}
-
-	generateList(resetIndex = true) {
-		this.itemList.innerHTML = '';
-
-		this.currentItems = []
-		if (resetIndex) {
-			this.selectedIndex = 0;
-			this.highlightedIndex = 0;
-		}
-
-		this.items.forEach((item, _) => {
-			if (this.filterUntagged) {
-				if (item.tags.length != 0) {
-					return;
-				}
-			}
-
-			if (this.searchTags.length === 0 || this.searchTags.every(tag => item.tags.includes(tag))) {
-				this.currentItems.push(item);
-			}
-		});
-
-		const start = this.currentPage * this.perPageElements;
-		const end = start + this.perPageElements - 1;
-		this.currentItems = this.currentItems.slice(start, end);
-
-		this.currentItems.forEach((item, index) => {
-			const listItem = document.createElement('li');
-			listItem.textContent = item.name;
-			listItem.setAttribute('data-info', item.info);
-			listItem.setAttribute('is-image', item.isImage);
-
-			if (item.tags && item.tags.length > 0) {
-				listItem.classList.add('item-with-tags');
-			}
-
-			listItem.addEventListener('click', () => {
-				this.selectedIndex = index;
-				this.updateSelection();
-			});
-
-			this.itemList.appendChild(listItem);
-		});
-
-	}
-
-	updateHighlight() {
-		const suggestionElements = document.querySelectorAll('.autocomplete-suggestion');
-		suggestionElements.forEach((element, index) => {
-			element.classList.toggle('highlighted', index === this.highlightedIndex);
-		});
-
-		if (this.highlightedIndex >= 0) {
-			const highlightedElement = suggestionElements[this.highlightedIndex];
-			const container = this.autocompleteSuggestions;
-
-			const elementTop = highlightedElement.offsetTop;
-			const elementBottom = elementTop + highlightedElement.offsetHeight;
-			const containerTop = container.scrollTop;
-			const containerBottom = containerTop + container.clientHeight;
-
-			if (elementTop < containerTop) {
-				container.scrollTop = elementTop;
-			} else if (elementBottom > containerBottom) {
-				container.scrollTop = elementBottom - container.clientHeight;
-			}
-		}
-	}
-
-	addSearchTags(newTags) {
-		newTags.forEach(tag => {
-			if (!this.searchTags.includes(tag.trim())) {
-				this.searchTags.push(tag.trim());
-			}
-		});
-		this.updateSearchTags();
-		this.generateList(true);
-		this.searchInput.value = '';
-	}
-
-	updateSearchTags() {
-		this.searchTagsContainer.innerHTML = '';
-
-		this.searchTags.forEach((tag, tagIndex) => {
-			const tagElement = document.createElement('div');
-			tagElement.classList.add('tag');
-			tagElement.innerHTML = `<span>${tag}</span> <button>&times;</button>`;
-
-			tagElement.querySelector('button').addEventListener('click', (e) => {
-				e.stopPropagation();
-				removeSearchTag(tagIndex);
-			});
-
-			this.searchTagsContainer.appendChild(tagElement);
-		});
-	}
-
-	removeSearchTag(tagIndex) {
-		this.searchTags.splice(tagIndex, 1);
-		this.updateSearchTags();
-		this.generateList(this.searchTags);
-	}
-
-	updateTagHighlight() {
-		const suggestionElements = document
-			.querySelectorAll('.popup-suggestions .suggestion-item');
-		suggestionElements.forEach((element, index) => {
-			element.classList.toggle('highlighted', index === this.highlightedTagIndex);
 		});
 	}
 }
