@@ -2,437 +2,475 @@ import { backendGetFiles, backendUpdateTags } from "./tauri.mjs";
 import { shuffle } from "./shuffle.mjs";
 import { showPopup, hidePopup, isPopupVisible } from './popup.mjs'
 
-const items = [];
-let currentItems = []
-let selectedIndex = -1;
-let searchTags = [];
-let highlightedIndex = -1;
-let filterUntagged = false;
+class Directory {
+	constructor() {
+		this.items = [];
+		this.globalTags = new Set();
+		this.itemList = document.getElementById('item-list');
+		this.infoDisplay = document.getElementById('info-display');
+		this.tagsContainer = document.getElementById('tags-container');
+		this.tagInput = document.getElementById('tag-input');
+		this.autocompleteSuggestions = document.getElementById('autocomplete-suggestions');
+		this.searchInput = document.getElementById('search-input');
+		this.searchTagsContainer = document.getElementById('search-tags-container');
+		this.tagSuggestionsPopup = document.getElementById('tag-suggestions');
+		this.checkbox = document.getElementById('filter-untagged');
+		this.perPageElements = 10;
 
-const globalTags = new Set();
-const itemList = document.getElementById('item-list');
-const infoDisplay = document.getElementById('info-display');
-const tagsContainer = document.getElementById('tags-container');
-const tagInput = document.getElementById('tag-input');
-const autocompleteSuggestions = document.getElementById('autocomplete-suggestions');
-const searchInput = document.getElementById('search-input');
-const searchTagsContainer = document.getElementById('search-tags-container');
-const tagSuggestionsPopup = document.getElementById('tag-suggestions');
-const checkbox = document.getElementById('filter-untagged');
-let currentPage = 0;
-const perPageElements = 10;
+		this.currentItems = []
+		this.selectedIndex = -1;
+		this.searchTags = [];
+		this.highlightedIndex = -1;
+		this.filterUntagged = false;
+		this.highlightedTagIndex = -1;
+		this.currentPage = 0;
 
-function updateSelection() {
-	const selectedItem = itemList.children[selectedIndex];
-	const itemInfo     = selectedItem.getAttribute('data-info');
-	const itemTags     = currentItems[selectedIndex].tags;
-
-	document.getElementById('item-info').textContent = itemInfo;
-	infoDisplay.classList.remove('hidden');
-
-	updateTags(itemTags);
-
-	Array.from(itemList.children).forEach(i => i.classList.remove('selected'));
-	selectedItem.classList.add('selected');
-
-	selectedItem.scrollIntoView({
-		behavior: 'smooth',
-		block:    'nearest',
-		inline:   'nearest'
-	});
-}
-
-function updateTags(tags) {
-	tagsContainer.innerHTML = '';
-
-	tags.forEach((tag, tagIndex) => {
-		const tagElement = document.createElement('div');
-		tagElement.classList.add('tag');
-		tagElement.innerHTML = `<span>${tag}</span> <button>&times;</button>`;
-
-		tagElement.querySelector('button').addEventListener('click', (e) => {
-			e.stopPropagation();
-			removeTag(tagIndex);
+		this.checkbox.addEventListener('change', () => {
+			if (this.checkbox.checked) {
+				this.filterUntagged = true;
+				this.generateList(true);
+			} else {
+				this.filterUntagged = false;
+				this.generateList(true);
+			}
+			this.updateSelection();
 		});
 
-		tagsContainer.appendChild(tagElement);
-	});
-}
-
-function removeTag(tagIndex) {
-	if (selectedIndex !== -1) {
-		currentItems[selectedIndex].tags.splice(tagIndex, 1);
-		updateTags(currentItems[selectedIndex].tags);
-		backendUpdateTags(currentItems[selectedIndex].name, currentItems[selectedIndex].tags);
-		generateList()
-	}
-}
-
-function addTags(newTags) {
-	if (selectedIndex !== -1) {
-		const currentTags = currentItems[selectedIndex].tags;
-		newTags.forEach(tag => {
-			if (tag && !currentTags.includes(tag.trim())) {
-				currentTags.push(tag.trim());
-				globalTags.add(tag.trim());
+		this.tagInput.addEventListener('keydown', (e) => {
+			if (e.key === 'Enter') {
+				e.preventDefault();
+				const tagsToAdd = this.tagInput.value.split(' ').filter(tag => tag.trim() !== '');
+				this.addTags(tagsToAdd);
 			}
 		});
-		updateTags(currentTags);
 
-		tagInput.value = '';
+		this.tagInput.addEventListener('input', (e) => {
+			const inputText = e.target.value.toLowerCase();
 
-		backendUpdateTags(currentItems[selectedIndex].name, currentItems[selectedIndex].tags)
-		generateList(false);
-	}
-}
+			const suggestions = Array.from(this.globalTags).filter(tag =>
+				tag.toLowerCase().startsWith(inputText) && tag !== inputText
+			);
 
-function generateList(resetIndex = true) {
-    itemList.innerHTML = '';
+			this.tagSuggestionsPopup.innerHTML = '';
 
-	currentItems = []
-	if (resetIndex) {
-		selectedIndex = 0;
-		highlightedIndex = 0;
-	}
+			if (suggestions.length > 0) {
+				this.tagSuggestionsPopup.style.display = 'block';
+				const tagInputRect = this.tagInput.getBoundingClientRect();
 
-    items.forEach((item, _) => {
-		if (filterUntagged) {
-			if (item.tags.length != 0) {
+				this.tagSuggestionsPopup.style.top = `${tagInputRect.bottom + window.scrollY}px`;
+				this.tagSuggestionsPopup.style.left = `${tagInputRect.left + window.scrollX}px`;
+
+				suggestions.forEach((suggestion, _) => {
+					const suggestionElement = document.createElement('div');
+					suggestionElement.textContent = suggestion;
+					suggestionElement.classList.add('suggestion-item');
+
+					suggestionElement.addEventListener('click', () => {
+						this.tagInput.value += (this.tagInput.value ? ' ' : '') + suggestion;
+						this.tagSuggestionsPopup.innerHTML = '';
+						this.tagSuggestionsPopup.style.display = 'none';
+					});
+
+					this.tagSuggestionsPopup.appendChild(suggestionElement);
+				});
+			} else {
+				this.tagSuggestionsPopup.style.display = 'none';
+			}
+		});
+
+		document.addEventListener('click', (e) => {
+			if (!e.target.closest('#tag-input') && !e.target.closest('#tag-suggestions')) {
+				this.tagSuggestionsPopup.style.display = 'none';
+			}
+		});
+
+		this.tagInput.addEventListener('keydown', (e) => {
+			const suggestions = document.querySelectorAll('.popup-suggestions .suggestion-item');
+
+			if (e.key === 'ArrowDown') {
+				if (isPopupVisible) {
+					return;
+				}
+				this.highlightedTagIndex = (this.highlightedTagIndex + 1) % suggestions.length;
+				this.updateTagHighlight();
+				e.preventDefault();
+			} else if (e.key === 'ArrowUp') {
+				if (isPopupVisible) {
+					return;
+				}
+				this.highlightedTagIndex = (this.highlightedTagIndex - 1 + suggestions.length) %
+					suggestions.length;
+				this.updateTagHighlight();
+				e.preventDefault();
+			}
+		});
+
+		this.itemList.addEventListener('click', () => {
+			this.toggleLeftBar(true);
+		});
+
+		document.addEventListener('click', (event) => {
+			if (isPopupVisible) {
 				return;
 			}
-		}
-
-        if (searchTags.length === 0 || searchTags.every(tag => item.tags.includes(tag))) {
-			currentItems.push(item);
-        }
-    });
-
-	const start = currentPage * perPageElements;
-	const end = start + perPageElements - 1;
-	currentItems = currentItems.slice(start, end);
-
-	currentItems.forEach((item, index) => {
-		const listItem = document.createElement('li');
-		listItem.textContent = item.name;
-		listItem.setAttribute('data-info', item.info);
-		listItem.setAttribute('is-image', item.isImage);
-
-		if (item.tags && item.tags.length > 0) {
-			listItem.classList.add('item-with-tags');
-		}
-
-		listItem.addEventListener('click', () => {
-			selectedIndex = index;
-			updateSelection();
+			if (!event.target.closest('#item-list') && !event.target.closest('#info-display')) {
+				this.toggleLeftBar(false);
+				Array.from(this.itemList.children).forEach(i => i.classList.remove('selected'));
+			}
+			this.autocompleteSuggestions.innerHTML = '';
+			this.autocompleteSuggestions.style.display = 'none';
 		});
 
-		itemList.appendChild(listItem);
-	});
+		document.addEventListener('keydown', (event) => {
+			if (event.key === 'Escape') {
 
-}
+				if (isPopupVisible) {
+					hidePopup();
+					return;
+				}
 
-function updateHighlight() {
-	const suggestionElements = document.querySelectorAll('.autocomplete-suggestion');
-	suggestionElements.forEach((element, index) => {
-		element.classList.toggle('highlighted', index === highlightedIndex);
-	});
+				this.hideLeftBar()
+			}
 
-	if (highlightedIndex >= 0) {
-		const highlightedElement = suggestionElements[highlightedIndex];
-		const container = autocompleteSuggestions;
+			if (event.key === 'ArrowDown') {
+				event.preventDefault();
 
-		const elementTop = highlightedElement.offsetTop;
-		const elementBottom = elementTop + highlightedElement.offsetHeight;
-		const containerTop = container.scrollTop;
-		const containerBottom = containerTop + container.clientHeight;
+				if (isPopupVisible) {
+					return;
+				}
 
-		if (elementTop < containerTop) {
-			container.scrollTop = elementTop;
-		} else if (elementBottom > containerBottom) {
-			container.scrollTop = elementBottom - container.clientHeight;
+				this.selectedIndex = (this.selectedIndex + 1) % this.currentItems.length;
+				this.updateSelection();
+			}
+
+			if (event.key === 'ArrowUp') {
+				if (isPopupVisible) {
+					return;
+				}
+
+				event.preventDefault();
+				this.selectedIndex = (this.selectedIndex - 1 + this.currentItems.length) % this.currentItems.length;
+				this.updateSelection();
+			}
+
+			if (event.key === 'ArrowLeft') {
+				event.preventDefault();
+
+				if (isPopupVisible) {
+					return;
+				}
+
+				this.currentPage--;
+				if (this.currentPage < 0) {
+					this.currentPage = 0;
+				}
+				this.hideLeftBar()
+				this.generateList(true);
+				this.updateSelection();
+			}
+
+			if (event.key === 'ArrowRight') {
+				event.preventDefault();
+
+				if (isPopupVisible) {
+					return;
+				}
+
+				this.currentPage++;
+				let maxPages;
+				if (this.searchTags.length > 0) {
+					maxPages = Math.round(this.currentItems.length / this.perPageElements);
+					if (maxPages != 0 && this.currentItems.length % this.perPageElements != 0) {
+						maxPages++;
+					}
+				} else
+				{
+					maxPages = this.items.length / this.perPageElements;
+					if (this.items.length % this.perPageElements != 0) {
+						maxPages++;
+					}
+				}
+
+				if (this.currentPage > maxPages - 1) {
+					if (maxPages == 0) {
+						this.currentPage = maxPages;
+					} else {
+						this.currentPage = maxPages - 1;
+					}
+				}
+				this.hideLeftBar();
+				this.generateList(true);
+				this.updateSelection();
+			}
+
+			if (event.code === 'Space') {
+				event.preventDefault();
+				if (isPopupVisible) {
+					hidePopup();
+				} else {
+					if (this.selectedIndex >= 0) {
+						showPopup(this.currentItems[this.selectedIndex].name);
+					}
+				}
+			}
+		});
+
+		this.searchInput.addEventListener('keydown', (e) => {
+			if (e.key === 'Enter') {
+				e.preventDefault();
+				const tagsToAdd = this.searchInput.value.split(' ').filter(tag => tag.trim() !== '');
+				this.addSearchTags(tagsToAdd);
+				this.currentPage = 0;
+				this.generateList(true);
+				this.updateSelection();
+			}
+		});
+
+		this.searchInput.addEventListener('input', (e) => {
+			const inputText = e.target.value;
+			const suggestions = Array.from(this.globalTags).filter(tag => tag.startsWith(inputText)
+				&& tag !== inputText);
+
+			this.autocompleteSuggestions.innerHTML = '';
+			this.autocompleteSuggestions.style.display = suggestions.length > 0 ? 'block' : 'none';
+			this.highlightedIndex = -1;
+
+			suggestions.forEach((suggestion, index) => {
+				const suggestionElement = document.createElement('div');
+				suggestionElement.textContent = suggestion;
+				suggestionElement.classList.add('autocomplete-suggestion');
+
+				suggestionElement.addEventListener('click', () => {
+					this.tagInput.value += (this.tagInput.value ? ' ' : '') + suggestion;
+					this.autocompleteSuggestions.innerHTML = '';
+					this.autocompleteSuggestions.style.display = 'none';
+				});
+
+				suggestionElement.addEventListener('mouseover', () => {
+					this.highlightedIndex = index;
+					this.updateHighlight();
+				});
+
+				this.autocompleteSuggestions.appendChild(suggestionElement);
+			});
+		});
+
+		this.searchInput.addEventListener('keydown', (e) => {
+			const suggestions = document.querySelectorAll('.autocomplete-suggestion');
+
+			if (e.key === 'ArrowDown') {
+				this.highlightedIndex = (this.highlightedIndex + 1) % suggestions.length;
+				this.updateHighlight();
+				e.preventDefault();
+			} else if (e.key === 'ArrowUp') {
+				this.highlightedIndex = (this.highlightedIndex - 1 + suggestions.length) % suggestions.length;
+				this.updateHighlight();
+				e.preventDefault();
+			} else if (e.key === 'Enter' && this.highlightedIndex > -1) {
+				this.autocompleteSuggestions.innerHTML = '';
+				this.autocompleteSuggestions.style.display = 'none';
+			}
+		});
+
+		document.getElementById("shuffle-button").addEventListener("click", () => {
+			shuffle(this.items);
+			this.currentPage = 0;
+			this.generateList(true);
+			this.updateSelection();
+		});
+	}
+
+	toggleLeftBar(show) {
+		this.infoDisplay.classList.toggle('hidden', !show);
+		if (!show) {
+			this.tagSuggestionsPopup.style.display = 'none';
+			this.autocompleteSuggestions.innerHTML = '';
+			this.autocompleteSuggestions.style.display = 'none';
 		}
 	}
-}
 
-function addSearchTags(newTags) {
-	newTags.forEach(tag => {
-		if (!searchTags.includes(tag.trim())) {
-			searchTags.push(tag.trim());
+	hideLeftBar() {
+		this.toggleLeftBar(false);
+		Array.from(this.itemList.children).forEach(i => i.classList.remove('selected'));
+		this.selectedIndex = -1;
+	}
+
+	updateSelection() {
+		const selectedItem = this.itemList.children[this.selectedIndex];
+		const itemInfo     = selectedItem.getAttribute('data-info');
+		const itemTags     = this.currentItems[this.selectedIndex].tags;
+
+		document.getElementById('item-info').textContent = itemInfo;
+		this.infoDisplay.classList.remove('hidden');
+
+		this.updateTags(itemTags);
+
+		Array.from(this.itemList.children).forEach(i => i.classList.remove('selected'));
+		selectedItem.classList.add('selected');
+
+		selectedItem.scrollIntoView({
+			behavior: 'smooth',
+			block:    'nearest',
+			inline:   'nearest'
+		});
+	}
+
+	updateTags(tags) {
+		this.tagsContainer.innerHTML = '';
+
+		tags.forEach((tag, tagIndex) => {
+			const tagElement = document.createElement('div');
+			tagElement.classList.add('tag');
+			tagElement.innerHTML = `<span>${tag}</span> <button>&times;</button>`;
+
+			tagElement.querySelector('button').addEventListener('click', (e) => {
+				e.stopPropagation();
+				removeTag(tagIndex);
+			});
+
+			this.tagsContainer.appendChild(tagElement);
+		});
+	}
+
+	removeTag(tagIndex) {
+		if (this.selectedIndex !== -1) {
+			this.currentItems[this.selectedIndex].tags.splice(tagIndex, 1);
+			this.updateTags(this.currentItems[this.selectedIndex].tags);
+			backendUpdateTags(this.currentItems[this.selectedIndex].name, this.currentItems[this.selectedIndex].tags);
+			this.generateList()
 		}
-	});
-	updateSearchTags();
-	generateList(true);
-	searchInput.value = '';
-}
+	}
 
-function updateSearchTags() {
-	searchTagsContainer.innerHTML = '';
+	addTags(newTags) {
+		if (this.selectedIndex !== -1) {
+			const currentTags = this.currentItems[this.selectedIndex].tags;
+			newTags.forEach(tag => {
+				if (tag && !currentTags.includes(tag.trim())) {
+					currentTags.push(tag.trim());
+					this.globalTags.add(tag.trim());
+				}
+			});
+			this.updateTags(currentTags);
 
-	searchTags.forEach((tag, tagIndex) => {
-		const tagElement = document.createElement('div');
-		tagElement.classList.add('tag');
-		tagElement.innerHTML = `<span>${tag}</span> <button>&times;</button>`;
+			this.tagInput.value = '';
 
-		tagElement.querySelector('button').addEventListener('click', (e) => {
-			e.stopPropagation();
-			removeSearchTag(tagIndex);
+			backendUpdateTags(this.currentItems[this.selectedIndex].name, this.currentItems[this.selectedIndex].tags)
+			this.generateList(false);
+		}
+	}
+
+	generateList(resetIndex = true) {
+		this.itemList.innerHTML = '';
+
+		this.currentItems = []
+		if (resetIndex) {
+			this.selectedIndex = 0;
+			this.highlightedIndex = 0;
+		}
+
+		this.items.forEach((item, _) => {
+			if (this.filterUntagged) {
+				if (item.tags.length != 0) {
+					return;
+				}
+			}
+
+			if (this.searchTags.length === 0 || this.searchTags.every(tag => item.tags.includes(tag))) {
+				this.currentItems.push(item);
+			}
 		});
 
-		searchTagsContainer.appendChild(tagElement);
-	});
-}
+		const start = this.currentPage * this.perPageElements;
+		const end = start + this.perPageElements - 1;
+		this.currentItems = this.currentItems.slice(start, end);
 
-function removeSearchTag(tagIndex) {
-	searchTags.splice(tagIndex, 1);
-	updateSearchTags();
-	generateList(searchTags);
-}
+		this.currentItems.forEach((item, index) => {
+			const listItem = document.createElement('li');
+			listItem.textContent = item.name;
+			listItem.setAttribute('data-info', item.info);
+			listItem.setAttribute('is-image', item.isImage);
 
-function updateTagHighlight() {
-    const suggestionElements = document
-		.querySelectorAll('.popup-suggestions .suggestion-item');
-    suggestionElements.forEach((element, index) => {
-        element.classList.toggle('highlighted', index === highlightedTagIndex);
-    });
-}
+			if (item.tags && item.tags.length > 0) {
+				listItem.classList.add('item-with-tags');
+			}
 
-function toggleLeftBar(show) {
-    infoDisplay.classList.toggle('hidden', !show);
-    if (!show) {
-        tagSuggestionsPopup.style.display = 'none';
-        autocompleteSuggestions.innerHTML = '';
-        autocompleteSuggestions.style.display = 'none';
-    }
+			listItem.addEventListener('click', () => {
+				this.selectedIndex = index;
+				this.updateSelection();
+			});
+
+			this.itemList.appendChild(listItem);
+		});
+
+	}
+
+	updateHighlight() {
+		const suggestionElements = document.querySelectorAll('.autocomplete-suggestion');
+		suggestionElements.forEach((element, index) => {
+			element.classList.toggle('highlighted', index === this.highlightedIndex);
+		});
+
+		if (this.highlightedIndex >= 0) {
+			const highlightedElement = suggestionElements[this.highlightedIndex];
+			const container = this.autocompleteSuggestions;
+
+			const elementTop = highlightedElement.offsetTop;
+			const elementBottom = elementTop + highlightedElement.offsetHeight;
+			const containerTop = container.scrollTop;
+			const containerBottom = containerTop + container.clientHeight;
+
+			if (elementTop < containerTop) {
+				container.scrollTop = elementTop;
+			} else if (elementBottom > containerBottom) {
+				container.scrollTop = elementBottom - container.clientHeight;
+			}
+		}
+	}
+
+	addSearchTags(newTags) {
+		newTags.forEach(tag => {
+			if (!this.searchTags.includes(tag.trim())) {
+				this.searchTags.push(tag.trim());
+			}
+		});
+		this.updateSearchTags();
+		this.generateList(true);
+		this.searchInput.value = '';
+	}
+
+	updateSearchTags() {
+		this.searchTagsContainer.innerHTML = '';
+
+		this.searchTags.forEach((tag, tagIndex) => {
+			const tagElement = document.createElement('div');
+			tagElement.classList.add('tag');
+			tagElement.innerHTML = `<span>${tag}</span> <button>&times;</button>`;
+
+			tagElement.querySelector('button').addEventListener('click', (e) => {
+				e.stopPropagation();
+				removeSearchTag(tagIndex);
+			});
+
+			this.searchTagsContainer.appendChild(tagElement);
+		});
+	}
+
+	removeSearchTag(tagIndex) {
+		this.searchTags.splice(tagIndex, 1);
+		this.updateSearchTags();
+		this.generateList(this.searchTags);
+	}
+
+	updateTagHighlight() {
+		const suggestionElements = document
+			.querySelectorAll('.popup-suggestions .suggestion-item');
+		suggestionElements.forEach((element, index) => {
+			element.classList.toggle('highlighted', index === this.highlightedTagIndex);
+		});
+	}
 }
 
 export function main() {
-	backendGetFiles(items, globalTags, generateList)
+	let d = new Directory;
+	backendGetFiles(d.items, d.globalTags, d.generateList.bind(d))
 }
-
-checkbox.addEventListener('change', () => {
-    if (checkbox.checked) {
-		filterUntagged = true;
-        generateList(true);
-    } else {
-		filterUntagged = false;
-        generateList(true);
-    }
-	updateSelection();
-});
-
-tagInput.addEventListener('keydown', (e) => {
-	if (e.key === 'Enter') {
-		e.preventDefault();
-		const tagsToAdd = tagInput.value.split(' ').filter(tag => tag.trim() !== '');
-		addTags(tagsToAdd);
-	}
-});
-
-tagInput.addEventListener('input', (e) => {
-    const inputText = e.target.value.toLowerCase();
-
-    const suggestions = Array.from(globalTags).filter(tag =>
-        tag.toLowerCase().startsWith(inputText) && tag !== inputText
-    );
-
-    tagSuggestionsPopup.innerHTML = '';
-
-    if (suggestions.length > 0) {
-        tagSuggestionsPopup.style.display = 'block';
-        const tagInputRect = tagInput.getBoundingClientRect();
-
-        tagSuggestionsPopup.style.top = `${tagInputRect.bottom + window.scrollY}px`;
-        tagSuggestionsPopup.style.left = `${tagInputRect.left + window.scrollX}px`;
-
-        suggestions.forEach((suggestion, _) => {
-            const suggestionElement = document.createElement('div');
-            suggestionElement.textContent = suggestion;
-            suggestionElement.classList.add('suggestion-item');
-
-            suggestionElement.addEventListener('click', () => {
-                tagInput.value += (tagInput.value ? ' ' : '') + suggestion;
-                tagSuggestionsPopup.innerHTML = '';
-                tagSuggestionsPopup.style.display = 'none';
-            });
-
-            tagSuggestionsPopup.appendChild(suggestionElement);
-        });
-    } else {
-        tagSuggestionsPopup.style.display = 'none';
-    }
-});
-
-document.addEventListener('click', (e) => {
-    if (!e.target.closest('#tag-input') && !e.target.closest('#tag-suggestions')) {
-        tagSuggestionsPopup.style.display = 'none';
-    }
-});
-
-let highlightedTagIndex = -1;
-
-tagInput.addEventListener('keydown', (e) => {
-    const suggestions = document.querySelectorAll('.popup-suggestions .suggestion-item');
-
-    if (e.key === 'ArrowDown') {
-        highlightedTagIndex = (highlightedTagIndex + 1) % suggestions.length;
-        updateTagHighlight();
-        e.preventDefault();
-    } else if (e.key === 'ArrowUp') {
-        highlightedTagIndex = (highlightedTagIndex - 1 + suggestions.length) %
-			suggestions.length;
-        updateTagHighlight();
-        e.preventDefault();
-    }
-});
-
-itemList.addEventListener('click', () => {
-	toggleLeftBar(true);
-});
-
-document.addEventListener('click', (event) => {
-    if (!event.target.closest('#item-list') && !event.target.closest('#info-display')) {
-        toggleLeftBar(false);
-        Array.from(itemList.children).forEach(i => i.classList.remove('selected'));
-    }
-    autocompleteSuggestions.innerHTML = '';
-    autocompleteSuggestions.style.display = 'none';
-});
-
-function hideLeftBar() {
-	toggleLeftBar(false);
-	Array.from(itemList.children).forEach(i => i.classList.remove('selected'));
-	selectedIndex = -1;
-}
-
-document.addEventListener('keydown', (event) => {
-	if (event.key === 'Escape') {
-		hideLeftBar()
-	}
-
-	if (event.key === 'ArrowDown') {
-		event.preventDefault();
-		selectedIndex = (selectedIndex + 1) % currentItems.length;
-		updateSelection();
-	}
-
-	if (event.key === 'ArrowUp') {
-		event.preventDefault();
-		selectedIndex = (selectedIndex - 1 + currentItems.length) % currentItems.length;
-		updateSelection();
-	}
-
-	if (event.key === 'ArrowLeft') {
-		event.preventDefault();
-		currentPage--;
-		if (currentPage < 0) {
-			currentPage = 0;
-		}
-		hideLeftBar()
-		generateList(true);
-		updateSelection();
-	}
-
-	if (event.key === 'ArrowRight') {
-		event.preventDefault();
-		currentPage++;
-		let maxPages;
-		if (searchTags.length > 0) {
-			maxPages = Math.round(currentItems.length / perPageElements);
-			if (maxPages != 0 && currentItems.length % perPageElements != 0) {
-				maxPages++;
-			}
-		} else
-		{
-			maxPages = items.length / perPageElements;
-			if (items.length % perPageElements != 0) {
-				maxPages++;
-			}
-		}
-
-		if (currentPage > maxPages - 1) {
-			if (maxPages == 0) {
-				currentPage = maxPages;
-			} else {
-				currentPage = maxPages - 1;
-			}
-		}
-		hideLeftBar();
-		generateList(true);
-		updateSelection();
-	}
-
-	if (event.code === 'Space') {
-		event.preventDefault();
-		if (isPopupVisible) {
-			hidePopup();
-		} else {
-			if (selectedIndex >= 0) {
-				showPopup(currentItems[selectedIndex].name);
-			}
-		}
-	}
-});
-
-searchInput.addEventListener('keydown', (e) => {
-	if (e.key === 'Enter') {
-		e.preventDefault();
-		const tagsToAdd = searchInput.value.split(' ').filter(tag => tag.trim() !== '');
-		addSearchTags(tagsToAdd);
-		currentPage = 0;
-		generateList(true);
-		updateSelection();
-	}
-});
-
-searchInput.addEventListener('input', (e) => {
-	const inputText = e.target.value;
-	const suggestions = Array.from(globalTags).filter(tag => tag.startsWith(inputText)
-		&& tag !== inputText);
-
-	autocompleteSuggestions.innerHTML = '';
-	autocompleteSuggestions.style.display = suggestions.length > 0 ? 'block' : 'none';
-	highlightedIndex = -1;
-
-	suggestions.forEach((suggestion, index) => {
-		const suggestionElement = document.createElement('div');
-		suggestionElement.textContent = suggestion;
-		suggestionElement.classList.add('autocomplete-suggestion');
-
-		suggestionElement.addEventListener('click', () => {
-			tagInput.value += (tagInput.value ? ' ' : '') + suggestion;
-			autocompleteSuggestions.innerHTML = '';
-			autocompleteSuggestions.style.display = 'none';
-		});
-
-		suggestionElement.addEventListener('mouseover', () => {
-			highlightedIndex = index;
-			updateHighlight();
-		});
-
-		autocompleteSuggestions.appendChild(suggestionElement);
-	});
-});
-
-searchInput.addEventListener('keydown', (e) => {
-	const suggestions = document.querySelectorAll('.autocomplete-suggestion');
-
-	if (e.key === 'ArrowDown') {
-		highlightedIndex = (highlightedIndex + 1) % suggestions.length;
-		updateHighlight();
-		e.preventDefault();
-	} else if (e.key === 'ArrowUp') {
-		highlightedIndex = (highlightedIndex - 1 + suggestions.length) % suggestions.length;
-		updateHighlight();
-		e.preventDefault();
-	} else if (e.key === 'Enter' && highlightedIndex > -1) {
-		autocompleteSuggestions.innerHTML = '';
-		autocompleteSuggestions.style.display = 'none';
-	}
-});
-
-document.getElementById("shuffle-button").addEventListener("click", () => {
-	shuffle(items);
-	currentPage = 0;
-	generateList(true);
-	updateSelection();
-});
