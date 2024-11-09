@@ -1,6 +1,7 @@
 import { backendGetFiles, backendUpdateTags } from "./tauri.mjs";
 import { shuffle } from "./shuffle.mjs";
 import { showPopup, hidePopup, isPopupVisible } from './popup.mjs'
+import { levenshteinDistance } from "./levenstein_distance.mjs";
 
 class Directory {
 	constructor() {
@@ -24,6 +25,8 @@ class Directory {
 		this.filterUntagged = false;
 		this.highlightedTagIndex = -1;
 		this.currentPage = 0;
+		this.isFocusedTagInput = false;
+		this.isSuggestClicked = false;
 
 		this.setDOM();
 	}
@@ -218,7 +221,129 @@ class Directory {
 		});
 	}
 
+	adjustScrollPosition(highlightedItem, container) {
+	  const itemRect = highlightedItem.getBoundingClientRect();
+	  const containerRect = container.getBoundingClientRect();
+
+	  if (itemRect.top < containerRect.top) {
+		container.scrollTop -= containerRect.top - itemRect.top;
+	  } else if (itemRect.bottom > containerRect.bottom) {
+		container.scrollTop += itemRect.bottom - containerRect.bottom;
+	  }
+	}
+
+	showSuggestionInInput(suggestion, inputText) {
+		this.tagInput.value = suggestion;
+		this.tagInput.setSelectionRange(inputText.length, suggestion.length);
+	};
+
+	resetSuggestionInInput() {
+		const typedText = this.tagInput.value.slice(0, this.tagInput.selectionStart);
+		this.tagInput.value = typedText;
+	};
+
+	setupTagInput() {
+		this.tagInput.addEventListener('keydown', (e) => {
+			if (e.key === 'Enter') {
+				e.preventDefault();
+				const tagsToAdd = this.tagInput.value.split(' ').filter(tag => tag.trim() !== '');
+				this.addTags(tagsToAdd);
+			}
+		});
+
+		this.tagInput.addEventListener('blur', () => {
+			this.isFocusedTagInput = false;
+		});
+
+		this.tagInput.addEventListener('focus', () => {
+			this.isFocusedTagInput = true;
+		});
+
+		this.tagInput.addEventListener('input', (e) => {
+			const inputText = e.target.value.toLowerCase();
+
+			const suggestions = Array.from(this.globalTags).filter(tag =>
+				tag.toLowerCase().startsWith(inputText)
+			);
+
+			suggestions.sort((a, b) => {
+				const distanceA = levenshteinDistance(a, inputText);
+				const distanceB = levenshteinDistance(b, inputText);
+				return distanceA - distanceB;
+			});
+
+			this.tagSuggestionsPopup.innerHTML = '';
+
+			if (suggestions.length > 0 && inputText.length > 0) {
+				const firstSuggestion = suggestions[0];
+				this.showSuggestionInInput(firstSuggestion, inputText);
+
+				this.tagSuggestionsPopup.style.display = 'block';
+				const tagInputRect = this.tagInput.getBoundingClientRect();
+				this.tagSuggestionsPopup.style.top = `${tagInputRect.bottom + window.scrollY}px`;
+				this.tagSuggestionsPopup.style.left = `${tagInputRect.left + window.scrollX}px`;
+
+				suggestions.forEach((suggestion) => {
+					const suggestionElement = document.createElement('div');
+					suggestionElement.textContent = suggestion;
+					suggestionElement.classList.add('suggestion-item');
+
+					suggestionElement.addEventListener('click', () => {
+						this.tagInput.value = suggestion;
+						this.tagInput.focus();
+						this.isSuggestClicked = true;
+					});
+
+					this.tagSuggestionsPopup.appendChild(suggestionElement);
+				});
+			} else {
+				this.tagSuggestionsPopup.style.display = 'none';
+				this.resetSuggestionInInput();
+			}
+		});
+
+		this.tagInput.addEventListener('keydown', (e) => {
+			// const suggestions = document.querySelectorAll('.popup-suggestions .suggestion-item');
+			// const popupContainer = document.querySelector('.popup-suggestions');
+
+			if (e.key === 'ArrowDown') {
+				// if (isPopupVisible) {
+				// 	return;
+				// }
+
+				// this.highlightedTagIndex = (this.highlightedTagIndex + 1) % suggestions.length;
+				// this.updateTagHighlight();
+				// this.adjustScrollPosition(suggestions[this.highlightedTagIndex], popupContainer);
+				// e.preventDefault();
+			} else if (e.key === 'ArrowUp') {
+				// if (isPopupVisible) {
+				// 	return;
+				// }
+				// this.isFocusedTagInput = true;
+				// this.highlightedTagIndex = (this.highlightedTagIndex - 1 + suggestions.length) % suggestions.length;
+				// this.updateTagHighlight();
+				// this.adjustScrollPosition(suggestions[this.highlightedTagIndex], popupContainer);
+				// e.preventDefault();
+			} else if (e.key === 'Enter') {
+				if (isPopupVisible) {
+					return;
+				}
+				this.isFocusedTagInput = true;
+				this.isSuggestClicked = true;
+
+				this.tagSuggestionsPopup.innerHTML = '';
+				this.tagSuggestionsPopup.style.display = 'none';
+				console.log("here");
+			} else if (e.key === 'Backspace') {
+				this.resetSuggestionInInput();
+			}
+		});
+	}
+
 	setDOM() {
+
+		this.setupTagInput();
+
 		this.checkbox.addEventListener('change', () => {
 			if (this.checkbox.checked) {
 				this.filterUntagged = true;
@@ -230,72 +355,9 @@ class Directory {
 			this.updateSelection();
 		});
 
-		this.tagInput.addEventListener('keydown', (e) => {
-			if (e.key === 'Enter') {
-				e.preventDefault();
-				const tagsToAdd = this.tagInput.value.split(' ').filter(tag => tag.trim() !== '');
-				this.addTags(tagsToAdd);
-			}
-		});
-
-		this.tagInput.addEventListener('input', (e) => {
-			const inputText = e.target.value.toLowerCase();
-
-			const suggestions = Array.from(this.globalTags).filter(tag =>
-				tag.toLowerCase().startsWith(inputText) && tag !== inputText
-			);
-
-			this.tagSuggestionsPopup.innerHTML = '';
-
-			if (suggestions.length > 0) {
-				this.tagSuggestionsPopup.style.display = 'block';
-				const tagInputRect = this.tagInput.getBoundingClientRect();
-
-				this.tagSuggestionsPopup.style.top = `${tagInputRect.bottom + window.scrollY}px`;
-				this.tagSuggestionsPopup.style.left = `${tagInputRect.left + window.scrollX}px`;
-
-				suggestions.forEach((suggestion, _) => {
-					const suggestionElement = document.createElement('div');
-					suggestionElement.textContent = suggestion;
-					suggestionElement.classList.add('suggestion-item');
-
-					suggestionElement.addEventListener('click', () => {
-						this.tagInput.value += (this.tagInput.value ? ' ' : '') + suggestion;
-						this.tagSuggestionsPopup.innerHTML = '';
-						this.tagSuggestionsPopup.style.display = 'none';
-					});
-
-					this.tagSuggestionsPopup.appendChild(suggestionElement);
-				});
-			} else {
-				this.tagSuggestionsPopup.style.display = 'none';
-			}
-		});
-
 		document.addEventListener('click', (e) => {
 			if (!e.target.closest('#tag-input') && !e.target.closest('#tag-suggestions')) {
 				this.tagSuggestionsPopup.style.display = 'none';
-			}
-		});
-
-		this.tagInput.addEventListener('keydown', (e) => {
-			const suggestions = document.querySelectorAll('.popup-suggestions .suggestion-item');
-
-			if (e.key === 'ArrowDown') {
-				if (isPopupVisible) {
-					return;
-				}
-				this.highlightedTagIndex = (this.highlightedTagIndex + 1) % suggestions.length;
-				this.updateTagHighlight();
-				e.preventDefault();
-			} else if (e.key === 'ArrowUp') {
-				if (isPopupVisible) {
-					return;
-				}
-				this.highlightedTagIndex = (this.highlightedTagIndex - 1 + suggestions.length) %
-					suggestions.length;
-				this.updateTagHighlight();
-				e.preventDefault();
 			}
 		});
 
@@ -304,9 +366,11 @@ class Directory {
 		});
 
 		document.addEventListener('click', (event) => {
-			if (isPopupVisible) {
+			if (isPopupVisible || this.isSuggestClicked) {
+				this.isSuggestClicked = false;
 				return;
 			}
+
 			if (!event.target.closest('#item-list') && !event.target.closest('#info-display')) {
 				this.toggleLeftBar(false);
 				Array.from(this.itemList.children).forEach(i => i.classList.remove('selected'));
@@ -317,6 +381,7 @@ class Directory {
 
 		document.addEventListener('keydown', (event) => {
 			if (event.key === 'Escape') {
+				this.isFocusedTagInput = false;
 
 				if (isPopupVisible) {
 					hidePopup();
