@@ -462,7 +462,7 @@ class Directory {
 				this.updateSelection();
 			}
 
-			if (event.code === 'Space') {
+			if (event.code === 'Space' && event.shiftKey) {
 				event.preventDefault();
 				if (isPopupVisible) {
 					hidePopup();
