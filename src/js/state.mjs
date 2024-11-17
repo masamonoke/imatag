@@ -15,14 +15,12 @@ class Directory {
 		this.searchInput = document.getElementById('search-input');
 		this.searchTagsContainer = document.getElementById('search-tags-container');
 		this.tagSuggestionsPopup = document.getElementById('tag-suggestions');
-		this.checkbox = document.getElementById('filter-untagged');
 		this.perPageElements = 10;
 
 		this.currentItems = []
 		this.selectedIndex = -1;
 		this.searchTags = [];
 		this.highlightedIndex = -1;
-		this.filterUntagged = false;
 		this.highlightedTagIndex = -1;
 		this.currentPage = 0;
 		this.isFocusedTagInput = false;
@@ -120,11 +118,11 @@ class Directory {
 		}
 
 		this.items.forEach((item, _) => {
-			if (this.filterUntagged) {
-				if (item.tags.length != 0) {
-					return;
-				}
-			}
+			// if (this.filterUntagged) {
+			// 	if (item.tags.length != 0) {
+			// 		return;
+			// 	}
+			// }
 
 			if (this.searchTags.length === 0 || this.searchTags.every(tag => item.tags.includes(tag))) {
 				this.currentItems.push(item);
@@ -343,17 +341,6 @@ class Directory {
 	setDOM() {
 
 		this.setupTagInput();
-
-		this.checkbox.addEventListener('change', () => {
-			if (this.checkbox.checked) {
-				this.filterUntagged = true;
-				this.generateList(true);
-			} else {
-				this.filterUntagged = false;
-				this.generateList(true);
-			}
-			this.updateSelection();
-		});
 
 		document.addEventListener('click', (e) => {
 			if (!e.target.closest('#tag-input') && !e.target.closest('#tag-suggestions')) {
